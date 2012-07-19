@@ -63,9 +63,10 @@ static struct xor_block_template *__initdata template_list;
 static void __init
 do_xor_speed(struct xor_block_template *tmpl, void *b1, void *b2)
 {
-	int speed;
-	unsigned long now, j;
-	int i, count, max;
+	unsigned speed, count;
+	u64 ns_begin;
+	u64 ns_end;
+	struct timespec ts;
 
 	tmpl->next = template_list;
 	template_list = tmpl;
@@ -73,30 +74,35 @@ do_xor_speed(struct xor_block_template *tmpl, void *b1, void *b2)
 	preempt_disable();
 
 	/*
-	 * Count the number of XORs done during a whole jiffy, and use
+	 * Count the number of XORs done during 10 miliseconds, and use
 	 * this to calculate the speed of checksumming.  We use a 2-page
 	 * allocation to have guaranteed color L1-cache layout.
 	 */
-	max = 0;
-	for (i = 0; i < 5; i++) {
-		j = jiffies;
-		count = 0;
-		while ((now = jiffies) == j)
-			cpu_relax();
-		while (time_before(jiffies, now + 1)) {
-			mb(); /* prevent loop optimzation */
-			tmpl->do_2(BENCH_SIZE, b1, b2);
-			mb();
-			count++;
-			mb();
-		}
-		if (count > max)
-			max = count;
+	ktime_get_ts(&ts);
+	ns_begin = timespec_to_ns(&ts);
+	count = 0;
+	while (count < 4000000L) {
+		mb(); /* prevent loop optimzation */
+		tmpl->do_2(BENCH_SIZE, b1, b2);
+		mb();
+		count++;
+		mb();
+
+		ktime_get_ts(&ts);
+		ns_end = timespec_to_ns(&ts);
+		/* Test for 10 miliseconds */
+		if ((ns_end - ns_begin) > NSEC_PER_SEC / 100)
+			break;
 	}
 
 	preempt_enable();
 
-	speed = max * (HZ * BENCH_SIZE / 1024);
+	ns_end -= ns_begin;
+	if (ns_end > 0 && count)
+		speed = div64_u64(BENCH_SIZE / 1024 * count * NSEC_PER_SEC,
+				  ns_end);
+	else
+		speed = 17;
 	tmpl->speed = speed;
 
 	printk(KERN_INFO "   %-10s: %5d.%03d MB/sec\n", tmpl->name,

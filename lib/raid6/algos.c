@@ -131,25 +131,35 @@ static inline const struct raid6_recov_calls *raid6_choose_recov(void)
 static inline const struct raid6_calls *raid6_choose_gen(
 	void *(*const dptrs)[(65536/PAGE_SIZE)+2], const int disks)
 {
-	unsigned long perf, bestperf, j0, j1;
+	unsigned long perf, bestperf;
 	const struct raid6_calls *const *algo;
 	const struct raid6_calls *best;
 
 	for (bestperf = 0, best = NULL, algo = raid6_algos; *algo; algo++) {
 		if (!best || (*algo)->prefer >= best->prefer) {
+			u64 ns_begin;
+			u64 ns_end;
+			struct timespec ts;
+
 			if ((*algo)->valid && !(*algo)->valid())
 				continue;
 
 			perf = 0;
 
 			preempt_disable();
-			j0 = jiffies;
-			while ((j1 = jiffies) == j0)
-				cpu_relax();
-			while (time_before(jiffies,
-					    j1 + (1<<RAID6_TIME_JIFFIES_LG2))) {
+
+			ktime_get_ts(&ts);
+			ns_begin = timespec_to_ns(&ts);
+			while (perf < 4000000L) {
+	
 				(*algo)->gen_syndrome(disks, PAGE_SIZE, *dptrs);
 				perf++;
+	
+				ktime_get_ts(&ts);
+				ns_end = timespec_to_ns(&ts);
+				/* Test for 10 miliseconds */
+				if ((ns_end - ns_begin) > NSEC_PER_SEC / 100)
+					break;
 			}
 			preempt_enable();
 
@@ -157,15 +167,14 @@ static inline const struct raid6_calls *raid6_choose_gen(
 				bestperf = perf;
 				best = *algo;
 			}
-			printk("raid6: %-8s %5ld MB/s\n", (*algo)->name,
-			       (perf*HZ) >> (20-16+RAID6_TIME_JIFFIES_LG2));
+			printk("raid6: %-8s %5ld \n", (*algo)->name,
+			       perf);
 		}
 	}
 
 	if (best) {
-		printk("raid6: using algorithm %s (%ld MB/s)\n",
-		       best->name,
-		       (bestperf*HZ) >> (20-16+RAID6_TIME_JIFFIES_LG2));
+		printk("raid6: using algorithm %s (%ld)\n",
+		       best->name, bestperf);
 		raid6_call = *best;
 	} else
 		printk("raid6: Yikes!  No algorithm found!\n");
