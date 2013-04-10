@@ -147,6 +147,11 @@ enum pnfs_osd_targetid_type {
 	OBJ_TARGET_SCSI_DEVICE_ID = 3,
 };
 
+enum pnfs_osd_target_ota {
+	OBJ_OTA_UNAVAILABLE = 0,
+	OBJ_OTA_AVAILABLE = 1,
+};
+
 /*   union pnfs_osd_targetid4 switch (pnfs_osd_targetid_type4 oti_type) {
  *       case OBJ_TARGET_SCSI_NAME:
  *           string              oti_scsi_name<>;
