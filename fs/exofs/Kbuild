@@ -17,5 +17,9 @@ libore-y := ore.o ore_raid.o
 obj-$(CONFIG_ORE) += libore.o
 
 exofs-y := inode.o file.o symlink.o namei.o dir.o super.o sys.o
-exofs-y += pnfs_osd_xdr_srv.o
+
+# below is for export_ioctl (Ganesha PNFS)
+ccflags-y += -D__linux__=1 -DKERNEL=1
+exofs-y += pnfs_layout_logic.o export_ioctl.o pnfs_osd_xdr_srv.o
+
 obj-$(CONFIG_EXOFS_FS) += exofs.o

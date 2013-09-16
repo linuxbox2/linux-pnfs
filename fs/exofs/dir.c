@@ -660,8 +660,18 @@ not_empty:
 	return 0;
 }
 
+long exofs_dir_ioctl(struct file *filp, unsigned int cmd, unsigned long param)
+{
+EXOFS_DBGMSG("\n");
+	return exofs_ioctl(filp, cmd, param);
+}
+
 const struct file_operations exofs_dir_operations = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
 	.iterate	= exofs_readdir,
+	.open		= exofs_file_open,
+	.unlocked_ioctl = exofs_dir_ioctl,
+	.compat_ioctl	= exofs_dir_ioctl,
+	.release	= exofs_release_file,
 };

@@ -32,11 +32,6 @@
  */
 #include "exofs.h"
 
-static int exofs_release_file(struct inode *inode, struct file *filp)
-{
-	return 0;
-}
-
 /* exofs_file_fsync - flush the inode to disk
  *
  *   Note, in exofs all metadata is written as part of inode, regardless.
@@ -65,6 +60,74 @@ static int exofs_flush(struct file *file, fl_owner_t id)
 	return ret;
 }
 
+int exofs_file_open(struct inode * inode, struct file * filp)
+{
+	filp->private_data = kzalloc(sizeof(struct pkc_pnfs_file), GFP_KERNEL);
+	if (unlikely(!filp->private_data))
+		return -ENOMEM;
+
+	pkc_pnfs_file_init(filp->private_data);
+	return 0;
+}
+
+int exofs_release_file(struct inode *inode, struct file *filp)
+{
+	pkc_pnfs_file_close(filp->private_data, exofs_i(inode));
+	kfree(filp->private_data);
+
+	return 0;
+}
+
+long exofs_ioctl(struct file *filp, unsigned int cmd, unsigned long param)
+{
+
+	/* determine space needed for the ioctl arguments.
+	 * We assume that if _IOC_SIZE is not zero that param is a buffer
+	 * of size _IOC_SIZE(cmd) bytes
+	 */
+	void *kernel_args = NULL;
+	int args_size = _IOC_SIZE(cmd);
+	int ret;
+
+
+	if (args_size > 0) {
+		kernel_args = kmalloc(args_size, GFP_KERNEL);
+		if (unlikely(!kernel_args))
+			return -ENOMEM;
+
+		if (_IOC_DIR(cmd) & _IOC_READ) {
+			ret = copy_from_user(kernel_args, (void *)param,
+					     args_size);
+			if (unlikely(ret))
+				return ret;
+		}
+	}
+
+	ret = pan_fs_client_pnfs_ioctl(exofs_i(filp->f_mapping->host),
+					filp->private_data, cmd, kernel_args);
+
+	if (args_size > 0) {
+		int ret2;
+
+		if (_IOC_DIR(cmd) & _IOC_WRITE) {
+			ret2 = copy_to_user((void *)param, kernel_args,
+					    args_size);
+			if (unlikely(ret2 && !ret))
+				ret = ret2;
+		}
+		kfree(kernel_args);
+	}
+
+/*	EXOFS_DBGMSG("cmd=0x%x, args_size=%d param=0x%lX => %d\n",
+		     cmd, args_size, param, ret);*/
+	return ret;
+}
+
+long exofs_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long param)
+{
+	return exofs_ioctl(filp, cmd, param);
+}
+
 const struct file_operations exofs_file_operations = {
 	.llseek		= generic_file_llseek,
 	.read		= do_sync_read,
@@ -72,7 +135,9 @@ const struct file_operations exofs_file_operations = {
 	.aio_read	= generic_file_aio_read,
 	.aio_write	= generic_file_aio_write,
 	.mmap		= generic_file_mmap,
-	.open		= generic_file_open,
+	.open		= exofs_file_open,
+	.unlocked_ioctl = exofs_ioctl,
+	.compat_ioctl	= exofs_compat_ioctl,
 	.release	= exofs_release_file,
 	.fsync		= exofs_file_fsync,
 	.flush		= exofs_flush,

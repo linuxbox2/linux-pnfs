@@ -39,6 +39,7 @@
 #include <scsi/osd_ore.h>
 
 #include "common.h"
+#include "pnfs_layout_logic.h"
 
 #define EXOFS_ERR(fmt, a...) printk(KERN_ERR "exofs: " fmt, ##a)
 
@@ -91,6 +92,8 @@ struct exofs_i_info {
 	uint64_t       i_commit_size;      /* the object's written length     */
 	struct ore_comp one_comp;	   /* same component for all devices  */
 	struct ore_components oc;	   /* inode view of the device table  */
+
+	struct pkc_pnfs_inode pnfs_inode;
 };
 
 static inline osd_id exofs_oi_objno(struct exofs_i_info *oi)
@@ -103,6 +106,7 @@ static inline osd_id exofs_oi_objno(struct exofs_i_info *oi)
  */
 #define OBJ_2BCREATED	0	/* object will be created soon*/
 #define OBJ_CREATED	1	/* object has been created on the osd*/
+#define OBJ_IN_LAYOUT_RECALL 2  /* exofs internals called a recall (setattr) */
 
 static inline int obj_2bcreated(struct exofs_i_info *oi)
 {
@@ -175,6 +179,11 @@ ino_t exofs_parent_ino(struct dentry *child);
 int exofs_set_link(struct inode *, struct exofs_dir_entry *, struct page *,
 		    struct inode *);
 
+/*file.c */
+int exofs_file_open(struct inode * inode, struct file * filp);
+int exofs_release_file(struct inode *inode, struct file *filp);
+long exofs_ioctl(struct file *filp, unsigned int cmd, unsigned long param);
+
 /* super.c               */
 void exofs_make_credential(u8 cred_a[OSD_CAP_LEN],
 			   const struct osd_obj_id *obj);
@@ -241,5 +250,22 @@ static inline void exofs_init_comps(struct ore_components *oc,
 	first_dev = (dev_mod * sbi->layout.mirrors_p1) % sbi->oc.numdevs;
 	oc->ods = &sbi->oc.ods[first_dev];
 }
+
+/* export.c */
+typedef int (exofs_recall_fn)(struct inode *inode, u64 data);
+// #ifdef CONFIG_PNFSD
+int exofs_inode_recall_layout(struct inode *inode, enum layoutiomode4 iomode,
+			      exofs_recall_fn todo, u64 todo_data);
+void exofs_init_export(struct super_block *sb);
+// #else
+// static inline int
+// exofs_inode_recall_layout(struct inode *inode, enum layoutiomode4 iomode,
+// exofs_recall_fn todo, u64 todo_data)
+// {
+// 	return todo(inode, todo_data);
+// }
+//
+// static inline void exofs_init_export(struct super_block *sb) {}
+// #endif
 
 #endif

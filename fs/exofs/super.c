@@ -844,7 +844,6 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 		goto free_sbi;
 	}
 
-	exofs_sysfs_dbg_print();
 	_exofs_print_device("Mounting", opts->dev_name,
 			    ore_comp_dev(&sbi->oc, 0),
 			    sbi->one_comp.obj.partition);
