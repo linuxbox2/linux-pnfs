@@ -62,17 +62,17 @@ static int exofs_flush(struct file *file, fl_owner_t id)
 
 int exofs_file_open(struct inode * inode, struct file * filp)
 {
-	filp->private_data = kzalloc(sizeof(struct pkc_pnfs_file), GFP_KERNEL);
+	filp->private_data = kzalloc(sizeof(struct pnfs_file), GFP_KERNEL);
 	if (unlikely(!filp->private_data))
 		return -ENOMEM;
 
-	pkc_pnfs_file_init(filp->private_data);
+	pnfs_file_init(filp->private_data);
 	return 0;
 }
 
 int exofs_release_file(struct inode *inode, struct file *filp)
 {
-	pkc_pnfs_file_close(filp->private_data, exofs_i(inode));
+	pnfs_file_close(filp->private_data, exofs_i(inode));
 	kfree(filp->private_data);
 
 	return 0;
@@ -103,7 +103,7 @@ long exofs_ioctl(struct file *filp, unsigned int cmd, unsigned long param)
 		}
 	}
 
-	ret = pan_fs_client_pnfs_ioctl(exofs_i(filp->f_mapping->host),
+	ret = exofs_pnfs_ioctl(exofs_i(filp->f_mapping->host),
 					filp->private_data, cmd, kernel_args);
 
 	if (args_size > 0) {

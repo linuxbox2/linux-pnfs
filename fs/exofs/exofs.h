@@ -39,6 +39,8 @@
 #include <scsi/osd_ore.h>
 
 #include "common.h"
+
+#include "lin_pnfs_types.h"
 #include "pnfs_layout_logic.h"
 
 #define EXOFS_ERR(fmt, a...) printk(KERN_ERR "exofs: " fmt, ##a)
@@ -93,7 +95,7 @@ struct exofs_i_info {
 	struct ore_comp one_comp;	   /* same component for all devices  */
 	struct ore_components oc;	   /* inode view of the device table  */
 
-	struct pkc_pnfs_inode pnfs_inode;
+	struct pnfs_node *pnfs_node;
 };
 
 static inline osd_id exofs_oi_objno(struct exofs_i_info *oi)
@@ -256,7 +258,15 @@ typedef int (exofs_recall_fn)(struct inode *inode, u64 data);
 // #ifdef CONFIG_PNFSD
 int exofs_inode_recall_layout(struct inode *inode, enum layoutiomode4 iomode,
 			      exofs_recall_fn todo, u64 todo_data);
+
 void exofs_init_export(struct super_block *sb);
+
+int exofs_pnfs_ioctl(
+	pan_fs_client_cache_pannode_t		*pannode,
+	struct pnfs_file 			*pnfs_file,
+	uint32_t				command,
+	void					*data);
+
 // #else
 // static inline int
 // exofs_inode_recall_layout(struct inode *inode, enum layoutiomode4 iomode,

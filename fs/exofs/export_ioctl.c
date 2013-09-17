@@ -27,6 +27,8 @@
 #include "exofs.h"
 #include "pnfs_osd_xdr_srv.h"
 
+#include <linux/completion.h>
+
 /* TODO: put in sysfs per sb */
 const static unsigned sb_shared_num_stripes = 8;
 
@@ -49,7 +51,7 @@ static int cb_layout_recall(
 	enum layoutiomode4 io_mode,
 	u64 offset, u64 length, void *waiter)
 {
-	int err = pkc_lo_recall(pannode, io_mode, offset, length, waiter);
+	int err = pnfs_lo_recall(pannode, NULL, 0, io_mode, offset, length, waiter);
 	return err;
 }
 
@@ -98,9 +100,9 @@ static bool _align_io(struct ore_layout *layout, struct pnfs_segment *lseg,
 }
 
 static enum nfsstat4
-_pkc_pnfs_layout_get(
+_pnfs_layout_get(
 	pan_fs_client_cache_pannode_t *oi,
-	struct pkc_pnfs_file *pnfs_file,
+	struct pnfs_file *pnfs_file,
 	struct exp_xdr_stream *xdr,
 	uint64_t clientid,
 	void *recall_file_info,
@@ -111,7 +113,7 @@ _pkc_pnfs_layout_get(
 	struct exofs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct ore_striping_info si;
 	struct pnfs_osd_layout layout;
-	struct pkc_layout* pkc_layout;
+	struct pnfs_layout* pnfs_layout;
 	__be32 *start;
 	unsigned i;
 	bool need_recall;
@@ -168,8 +170,8 @@ _pkc_pnfs_layout_get(
 		}
 	}
 
-	pkc_layout = pkc_lo_new();
-	if (unlikely(!pkc_layout))
+	pnfs_layout = pnfs_lo_new();
+	if (unlikely(!pnfs_layout))
 		return NFS4ERR_LAYOUTTRYLATER; /*should this be NFS4ERR_RESOURCE*/
 
 	start = xdr->p;
@@ -218,13 +220,13 @@ _pkc_pnfs_layout_get(
 	/* Add to per file_pointer and per_inode layout list, if it failed
 	 * it means a write-layout without callback channel.
 	 */
-	pkc_layout->seg = res->segment;
-	pkc_layout->caps = NULL /*cap_res->cap*/;
-	pkc_layout->clientid = clientid;
+	pnfs_layout->seg = res->segment;
+	pnfs_layout->caps = NULL /*cap_res->cap*/;
+	pnfs_layout->clientid = clientid;
 
-	pkc_lo_add2file(pkc_layout, pnfs_file, oi, recall_file_info);
+	pnfs_lo_add2file(pnfs_layout, pnfs_file, oi, recall_file_info);
 
-	res->fsal_seg_data = pkc_layout;
+	res->fsal_seg_data = pnfs_layout;
 	res->return_on_close = 1;
 
 out:
@@ -321,7 +323,7 @@ static void exofs_handle_error(struct pnfs_osd_ioerr *ioerr)
 static int
 _pkc_pnfs_layout_return(
 	pan_fs_client_cache_pannode_t *oi,
-	struct pkc_pnfs_file *pnfs_file,
+	struct pnfs_file *pnfs_file,
 	struct exp_xdr_stream *xdr,
 	const struct fsal_layoutreturn_arg *args)
 {
@@ -342,14 +344,14 @@ _pkc_pnfs_layout_return(
 
 	/* If args->fsal_seg_data is NULL it's a parial return */
 	if (args->fsal_seg_data || args->ncookies) {
-		struct pkc_layout *lo = args->fsal_seg_data;
-		struct pkc_recall *recall = (void *)args->recall_cookies[0];
+		struct pnfs_layout *lo = args->fsal_seg_data;
+		struct pnfs_recall *recall = (void *)args->recall_cookies[0];
 		struct completion *waiter = NULL;
 
 		if (recall) /* recall will dealocate below */
 			waiter = recall->waiter;
 
-		pkc_lo_return(lo, pnfs_file, oi, recall);
+		pnfs_lo_return(lo, pnfs_file, oi, recall);
 
 		if (waiter)
 			complete(waiter);
@@ -512,10 +514,9 @@ inline int IOCTL_XDR_COPYOUT(struct k_xdr *k_xdr,
 				    ioctl_xdr->xdr_len);
 }
 
-int
-pan_fs_client_pnfs_ioctl(
+int exofs_pnfs_ioctl(
 	pan_fs_client_cache_pannode_t		*pannode,
-	struct pkc_pnfs_file 			*pnfs_file,
+	struct pnfs_file 			*pnfs_file,
 	uint32_t				command,
 	void					*data)
 {
@@ -536,7 +537,7 @@ pan_fs_client_pnfs_ioctl(
 		err = IOCTL_COPYIN(&arg, plgi->arg);		CHK(err);	/* IN */
 		err = IOCTL_COPYIN(&res, plgi->res);		CHK(err);	/* IN/OUT */
 
-		plgi->hdr.nfsstat = _pkc_pnfs_layout_get(pannode, pnfs_file,
+		plgi->hdr.nfsstat = _pnfs_layout_get(pannode, pnfs_file,
 						&xdr.exp_xdr, plgi->clientid,
 						plgi->recall_file_info,
 						&arg, &res);
@@ -603,7 +604,7 @@ pan_fs_client_pnfs_ioctl(
 			unsigned tocopy = min_t(unsigned,
 					pclri->max_events - pclri->num_events,
 					EONSTACK);
-			int numevents = pkc_lo_receive_recalls(
+			int numevents = pnfs_lo_receive_recalls(
 							pannode, recall_events,
 							tocopy, alow_sleep);
 
@@ -647,7 +648,7 @@ pan_fs_client_pnfs_ioctl(
 		struct pan_cancel_recalls_ioctl *pcri = data;
 
 		err = 0;
-		pcri->hdr.nfsstat = pkc_lo_cancel_recalls(pannode,
+		pcri->hdr.nfsstat = pnfs_lo_cancel_recalls(pannode,
 							  pcri->debug_magic);
 
 	}

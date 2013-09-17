@@ -1,0 +1,165 @@
+--- ../../p4/samana-dev/src/panfs/include/pan/fs/client/unix/pnfs_layout_logic.h	2013-09-12 16:40:58.128706869 +0300
++++ fs/exofs/pnfs_layout_logic.h	2013-09-17 16:52:33.385319682 +0300
+@@ -108,8 +108,8 @@ struct pnfs_node {
+		E_LO_GET_SUCCESS,
+		E_LO_GET_CANCLE,
+	} layout_get_state;
+-	pan_uint64_t last_layout_group_size;
+-	pan_uint64_t last_layout_stripe_size;
++	uint64_t last_layout_group_size;
++	uint64_t last_layout_stripe_size;
+
+	/* On the root_node these are for pnfs_lo_receive_recalls */
+	/* On regular pnfs_node these hold the pending recalls */
+@@ -144,6 +144,7 @@ struct pnfs_recall {
+
+	/* @ev.seg is the union of all segments attached to this recall */
+	struct pan_cb_layoutrecall_event ev;
++	void *waiter;
+ };
+
+ struct pnfs_layout {
+@@ -210,7 +211,7 @@ void pnfs_lo_return(struct pnfs_layout*
+  */
+ int pnfs_lo_recall(pan_fs_client_cache_pannode_t *pannode, void *caps,
+	uint64_t clientid, enum layoutiomode4 iomode,
+-	uint64_t offset, uint64_t length);
++	uint64_t offset, uint64_t length, void *waiter);
+
+ /* The PAN_FS_CLIENT_PNFS_LAYOUTRECALL ioctl will call this to deliver callbacks
+  * to user-mode. It might deliver upto @max_events at the time.
+--- ../../p4/samana-dev/src/panfs/fs/client/pnfs/pnfs_layout_logic.c	2013-09-13 13:57:46.413242252 +0300
++++ fs/exofs/pnfs_layout_logic.c	2013-09-17 16:57:14.685478195 +0300
+@@ -10,16 +10,9 @@
+
+ #ifndef __splint__
+
+-#include <pan/fs/client/pan_fs_client_cache_pannode.h>
+-#include <pan/fs/client/pan_fs_client_llapi_realm.h>
+-#include <pan/fs/client/unix/pnfs_layout_logic.h>
+-#include <pan/fs/client/unix/pan_unix_fs_client_ioctl.h>
+-
+-#include <pan/pan_log.h>
+-#include <pan/pan_mem.h>
+-#include <pan/pan_kernel_copyinout.h>
+-
++#include "exofs.h"
+ #include "lin_pnfs_types.h"
++#include "pnfs_layout_logic.h"
+ #include "lo_list.h"
+
+ /* return a zero-out pnfs_layout */
+@@ -61,7 +54,8 @@ static void __recall_free(struct pnfs_re
+
+ static struct pnfs_node *_pnfs_get_root(pan_fs_client_cache_pannode_t *pannode)
+ {
+-	return pannode->mountpoint->root_pannode->pnfs_node;
++// 	return pannode->mountpoint->root_pannode->pnfs_node;
++	return exofs_i(pannode->vfs_inode.i_sb->s_root->d_inode)->pnfs_node;
+ }
+
+ static void _lo_caps_release(struct pnfs_layout *lo)
+@@ -72,8 +66,8 @@ static void _lo_caps_release(struct pnfs
+	}
+
+	PNFS_DBG("caps=%p\n", lo->caps);
+-	pan_fs_client_cap_release(lo->caps,
+-				  PAN_FS_CLIENT_CAP_DEPRECATE_F_NO_WAIT);
++/*	pan_fs_client_cap_release(lo->caps,
++				  PAN_FS_CLIENT_CAP_DEPRECATE_F_NO_WAIT);*/
+	lo->caps = NULL;
+ }
+
+@@ -101,15 +95,15 @@ int pnfs_pannode_init(pan_fs_client_cach
+ {
+	struct pnfs_node *pnfs_node;
+
+-	if(pannode->pnfs_node)
+-		pan_log(PAN_LOG_WARNING, PAN_LOG_NONE,
+-			"pnfs_pannode_init: Called with pannode->pnfs_node(%p) != NULL\n"
+-			"~S\n", pannode->pnfs_node);
++// 	if(pannode->pnfs_node)
++// 		pan_log(PAN_LOG_WARNING, PAN_LOG_NONE,
++// 			"pnfs_pannode_init: Called with pannode->pnfs_node(%p) != NULL\n"
++// 			"~S\n", pannode->pnfs_node);
+
+	pnfs_node = lo_zalloc(sizeof(*pannode->pnfs_node));
+	if (!pnfs_node) {
+		PNFS_DBG("!!!! allocation failed\n");
+-		return PAN_NO_MEM;
++		return -ENOMEM;
+	}
+
+ PNFS_DBG("pnfs_node=%p\n", pnfs_node);
+@@ -136,14 +130,14 @@ void pnfs_pannode_release(pan_fs_client_
+	struct lo_list_head del_list;
+	struct pnfs_layout* lo, *t;
+
+-	if (!pnfs_node ||
+-	    pannode->type != PAN_FS_CLIENT_CACHE_PANNODE_TYPE__FILE)
++	if (!pnfs_node/* ||
++	    pannode->type != PAN_FS_CLIENT_CACHE_PANNODE_TYPE__FILE*/)
+		return; /* optimize for dirs */
+
+	lo_list_init(&del_list);
+
+	_pnfs_node_lock(pnfs_node);
+-	pannode->redelegate_callback = NULL;
++// 	pannode->redelegate_callback = NULL;
+
+	lo_list_for_each_entry_safe(lo, t, &pnfs_node->layouts, layouts) {
+		_lo_detach(lo);
+@@ -187,8 +181,8 @@ void pnfs_file_close(struct pnfs_file* p
+	struct lo_list_head del_list;
+	struct pnfs_layout* lo, *t;
+
+-	if (!pnfs_node ||
+-	    pannode->type != PAN_FS_CLIENT_CACHE_PANNODE_TYPE__FILE)
++	if (!pnfs_node /*||
++	    pannode->type != PAN_FS_CLIENT_CACHE_PANNODE_TYPE__FILE*/)
+		return; /* optimize for dirs */
+
+	lo_list_init(&del_list);
+@@ -389,7 +383,7 @@ static int __recalls_wait_event(struct p
+  */
+ int pnfs_lo_recall(pan_fs_client_cache_pannode_t *pannode, void *caps,
+	uint64_t clientid, enum layoutiomode4 iomode,
+-	uint64_t offset, uint64_t length)
++	uint64_t offset, uint64_t length, void *waiter)
+ {
+	struct pnfs_node *pnfs_node = pannode->pnfs_node;
+	struct pnfs_recall *recall;
+@@ -440,20 +434,21 @@ int pnfs_lo_recall(pan_fs_client_cache_p
+		struct pnfs_node *pnfs_root = _pnfs_get_root(pannode);
+
+		recall->ev.recall_file_info = pnfs_node->recall_file_info;
++		recall->waiter = waiter;
+
+		lo_list_add(&recall->per_node, &pnfs_node->recalls);
+
+-		if (pnfs_node->in_roc_state) {
++/*		if (pnfs_node->in_roc_state) {
+			lo_list_for_each_entry(lo, &recall->layouts, layouts) {
+				_lo_caps_release(lo);
+			}
+-		} else {
++		} else {*/
+			_pnfs_node_lock(pnfs_root);
+			lo_list_add(&recall->recalls, &pnfs_root->recalls);
+			_pnfs_node_unlock(pnfs_root);
+
+			__recalls_signal_event(pnfs_root);
+-		}
++// 		}
+
+		ret = 0;
+	}
+@@ -523,7 +518,7 @@ int pnfs_lo_cancel_recalls(pan_fs_client
+
+	if (debug_magic) {
+		if (0 == pnfs_lo_recall(pannode, NULL, 0,
+-		                        LAYOUTIOMODE4_ANY, 0, ~0LLU)) {
++		                        LAYOUTIOMODE4_ANY, 0, ~0LLU, NULL)) {
+			PNFS_DBG("debug_magic: Some layouts where recalled\n");
+			return 1;/* Some layouts where recalled */
+		}
