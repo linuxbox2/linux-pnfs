@@ -1914,10 +1914,10 @@ analyze:
 		osi->osd_err_pri = 0;
 		ret = 0;
 	} else if (osi->additional_code == scsi_invalid_field_in_cdb) {
-		if (osi->cdb_field_offset == OSD_CFO_STARTING_BYTE) {
+/*		if (osi->cdb_field_offset == OSD_CFO_STARTING_BYTE) {*/
 			osi->osd_err_pri = OSD_ERR_PRI_CLEAR_PAGES;
 			ret = -EFAULT; /* caller should recover from this */
-		} else if (osi->cdb_field_offset == OSD_CFO_OBJECT_ID) {
+/*		} else if (osi->cdb_field_offset == OSD_CFO_OBJECT_ID) {
 			osi->osd_err_pri = OSD_ERR_PRI_NOT_FOUND;
 			ret = -ENOENT;
 		} else if (osi->cdb_field_offset == OSD_CFO_PERMISSIONS) {
@@ -1926,7 +1926,7 @@ analyze:
 		} else {
 			osi->osd_err_pri = OSD_ERR_PRI_BAD_CRED;
 			ret = -EINVAL;
-		}
+		}*/
 	} else if (osi->additional_code == osd_quota_error) {
 		osi->osd_err_pri = OSD_ERR_PRI_NO_SPACE;
 		ret = -ENOSPC;
