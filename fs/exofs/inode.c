@@ -1153,7 +1153,6 @@ static void __oi_init(struct exofs_i_info *oi)
 {
 	init_waitqueue_head(&oi->i_wq);
 	oi->i_flags = 0;
-	pnfs_pannode_init(oi);
 }
 /*
  * Fill in an inode read from the OSD and set it up for use

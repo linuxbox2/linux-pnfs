@@ -52,6 +52,11 @@ static void __recall_free(struct pnfs_recall *recall)
 	lo_free(recall/*, sizeof(*recall)*/);
 }
 
+static bool LO_IS_DIR(pan_fs_client_cache_pannode_t *pannode)
+{
+	return S_ISDIR(pannode->vfs_inode.i_mode);
+}
+
 static struct pnfs_node *_pnfs_get_root(pan_fs_client_cache_pannode_t *pannode)
 {
 // 	return pannode->mountpoint->root_pannode->pnfs_node;
@@ -130,8 +135,7 @@ void pnfs_pannode_release(pan_fs_client_cache_pannode_t *pannode)
 	struct lo_list_head del_list;
 	struct pnfs_layout* lo, *t;
 
-	if (!pnfs_node/* ||
-	    pannode->type != PAN_FS_CLIENT_CACHE_PANNODE_TYPE__FILE*/)
+	if (!pnfs_node || LO_IS_DIR(pannode))
 		return; /* optimize for dirs */
 
 	lo_list_init(&del_list);
@@ -181,8 +185,7 @@ void pnfs_file_close(struct pnfs_file* pnfs_file,
 	struct lo_list_head del_list;
 	struct pnfs_layout* lo, *t;
 
-	if (!pnfs_node /*||
-	    pannode->type != PAN_FS_CLIENT_CACHE_PANNODE_TYPE__FILE*/)
+	if (!pnfs_node || LO_IS_DIR(pannode))
 		return; /* optimize for dirs */
 
 	lo_list_init(&del_list);

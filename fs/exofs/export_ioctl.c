@@ -522,6 +522,24 @@ int exofs_pnfs_ioctl(
 {
 	int err;
 	struct k_xdr xdr = {{0}}; /* garbage collected at out: */
+	pan_fs_client_cache_pannode_t *root =
+			     exofs_i(pannode->vfs_inode.i_sb->s_root->d_inode);
+
+	/* We only allocate pnfs structures on first use */
+	if(!root->pnfs_node) {
+		err = pnfs_pannode_init(root);
+		if (err) {
+			PNFS_DBG("!!!! pnfs_pannode_init => %d\n", err);
+			return err;
+		}
+	}
+	if(!pannode->pnfs_node) {
+		err = pnfs_pannode_init(pannode);
+		if (err) {
+			PNFS_DBG("!!!! pnfs_pannode_init => %d\n", err);
+			return err;
+		}
+	}
 
 #define CHK(err) if (err) {printk(KERN_ERR "CHK-err: @%d\n", __LINE__); goto out;}
 
