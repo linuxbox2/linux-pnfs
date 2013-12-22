@@ -25,7 +25,8 @@
 #include "mconsole_kern.h"
 #include <init.h>
 
-#define MAX_TTYS (16)
+// #define MAX_TTYS (16)
+#define MAX_TTYS (2)
 
 static void stdio_announce(char *dev_name, int dev)
 {
