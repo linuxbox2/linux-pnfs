@@ -688,6 +688,9 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo, const nfs4_stateid *new,
 		if (empty || pnfs_seqid_is_newer(new_barrier, lo->plh_barrier))
 			lo->plh_barrier = new_barrier;
 	}
+
+	dprintk("%s: empty=%d oldseq=%u newseq=%u new_barrier=%u plh_barrier=%u\n",
+		__func__, empty, oldseq, newseq, new_barrier, lo->plh_barrier);
 }
 
 static bool
@@ -695,18 +698,34 @@ pnfs_layout_stateid_blocked(const struct pnfs_layout_hdr *lo,
 		const nfs4_stateid *stateid)
 {
 	u32 seqid = be32_to_cpu(stateid->seqid);
+	bool ret = !pnfs_seqid_is_newer(seqid, lo->plh_barrier);
 
-	return !pnfs_seqid_is_newer(seqid, lo->plh_barrier);
+	if (ret)
+		dprintk("STD-POLICE: seqid=%u plh_barrier=%u\n",
+			seqid, lo->plh_barrier);
+
+	return 0;
 }
 
 /* lget is set to 1 if called from inside send_layoutget call chain */
 static bool
 pnfs_layoutgets_blocked(const struct pnfs_layout_hdr *lo, int lget)
 {
-	return lo->plh_block_lgets ||
-		test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags) ||
+	bool bulk_recall = test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
+	int  plh_outstanding = atomic_read(&lo->plh_outstanding);
+	bool ret;
+
+	ret = lo->plh_block_lgets ||
+		bulk_recall ||
 		(list_empty(&lo->plh_segs) &&
-		 (atomic_read(&lo->plh_outstanding) > lget));
+		 (plh_outstanding > lget));
+
+	if (ret)
+		dprintk("STD-POLICE: plh_block_lgets=%lu bulk_recall=%d, list_empty=%d plh_outstanding=%d lget=%d\n",
+			lo->plh_block_lgets, bulk_recall,
+			list_empty(&lo->plh_segs), plh_outstanding, lget);
+
+	return 0;
 }
 
 int
@@ -774,6 +793,8 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	 */
 	lseg = nfs4_proc_layoutget(lgp, gfp_flags);
 	if (IS_ERR(lseg)) {
+		dprintk("%s: nfs4_proc_layoutget => %ld\n",
+			__func__, PTR_ERR(lseg));
 		switch (PTR_ERR(lseg)) {
 		case -ENOMEM:
 		case -ERESTARTSYS:
@@ -1828,6 +1849,7 @@ static void pnfs_list_write_lseg_done(struct inode *inode, struct list_head *lis
 
 void pnfs_set_lo_fail(struct pnfs_layout_segment *lseg)
 {
+	WARN_ON(1);
 	pnfs_layout_io_set_failed(lseg->pls_layout, lseg->pls_range.iomode);
 }
 EXPORT_SYMBOL_GPL(pnfs_set_lo_fail);

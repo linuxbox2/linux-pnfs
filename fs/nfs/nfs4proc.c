@@ -7445,7 +7445,7 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 				    min((giveup - now - 1),
 					now - lgp->args.timestamp));
 
-			dprintk("%s: NFS4ERR_RECALLCONFLICT waiting %lu\n",
+			printk(KERN_ERR "%s: NFS4ERR_RECALLCONFLICT waiting %lu\n",
 				__func__, delay);
 			rpc_delay(task, delay);
 			task->tk_status = 0;
