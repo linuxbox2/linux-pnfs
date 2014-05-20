@@ -349,7 +349,7 @@ static int read_exec(struct page_collect *pcol)
 	if (unlikely(ret))
 		goto err;
 
-	EXOFS_DBGMSG2("read_exec(0x%lx) offset=0x%llx length=0x%llx\n",
+	EXOFS_DBGMSG("read_exec(0x%lx) offset=0x%llx length=0x%llx\n",
 		pcol->inode->i_ino, _LLU(ios->offset), _LLU(ios->length));
 
 	ret = ore_read(ios);
@@ -535,7 +535,7 @@ static void writepages_done(struct ore_io_state *ios, void *p)
 		good_bytes = 0;
 	}
 
-	EXOFS_DBGMSG2("writepages_done(0x%lx) good_bytes=0x%llx"
+	EXOFS_DBGMSG("writepages_done(0x%lx) good_bytes=0x%llx"
 		     " length=0x%lx nr_pages=%u\n",
 		     pcol->inode->i_ino, _LLU(good_bytes), pcol->length,
 		     pcol->nr_pages);
@@ -667,7 +667,7 @@ static int write_exec(struct page_collect *pcol)
 	if (unlikely(ret))
 		goto err;
 
-	EXOFS_DBGMSG2("write_exec(0x%lx) offset=0x%llx length=0x%llx\n",
+	EXOFS_DBGMSG("write_exec(0x%lx) offset=0x%llx length=0x%llx\n",
 		pcol->inode->i_ino, _LLU(ios->offset), _LLU(ios->length));
 
 	ret = ore_write(ios);
@@ -1080,9 +1080,11 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 		[0] = g_attr_inode_data,
 		[1] = g_attr_inode_file_layout,
 		[2] = g_attr_inode_dir_layout,
+		/*[3] = g_attr_actual_data_space,*/
 	};
 	struct ore_io_state *ios;
 	struct exofs_on_disk_inode_layout *layout;
+	int i;
 	int ret;
 
 	ret = ore_get_io_state(&sbi->layout, &oi->oc, &ios);
@@ -1115,6 +1117,10 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 		EXOFS_ERR("%s: extract_attr 0 of inode failed\n", __func__);
 		goto out;
 	}
+	i = 0;
+	EXOFS_DBGMSG("attr %d: len=0x%hx attr_id=0x%x\n",
+			i, attrs[i].len, attrs[i].attr_id);
+	EXOFS_DBGMSG("size:0x%lx\n", EXOFS_INO_ATTR_SIZE);
 	WARN_ON(attrs[0].len != EXOFS_INO_ATTR_SIZE);
 	memcpy(inode, attrs[0].val_ptr, EXOFS_INO_ATTR_SIZE);
 
@@ -1123,6 +1129,9 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 		EXOFS_ERR("%s: extract_attr 1 of inode failed\n", __func__);
 		goto out;
 	}
+	i = 1;
+	EXOFS_DBGMSG("attr %d: len=0x%hx attr_id=0x%x\n",
+			i, attrs[i].len, attrs[i].attr_id);
 	if (attrs[1].len) {
 		layout = attrs[1].val_ptr;
 		if (layout->gen_func != cpu_to_le16(LAYOUT_MOVING_WINDOW)) {
@@ -1138,6 +1147,9 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 		EXOFS_ERR("%s: extract_attr 2 of inode failed\n", __func__);
 		goto out;
 	}
+	i = 2;
+	EXOFS_DBGMSG("attr %d: len=0x%hx attr_id=0x%x\n",
+			i, attrs[i].len, attrs[i].attr_id);
 	if (attrs[2].len) {
 		layout = attrs[2].val_ptr;
 		if (layout->gen_func != cpu_to_le16(LAYOUT_MOVING_WINDOW)) {
@@ -1147,6 +1159,19 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 			goto out;
 		}
 	}
+
+	/*ret = extract_attr_from_ios(ios, 0, &attrs[3]);*/
+	/*if (ret) {*/
+		/*EXOFS_ERR("%s: extract_attr 3 of inode failed\n", __func__);*/
+		/*goto out;*/
+	/*}*/
+	/*i = 3;*/
+	/*EXOFS_DBGMSG("attr %d: len=0x%hx attr_id=0x%x\n",*/
+			/*i, attrs[i].len, attrs[i].attr_id);*/
+	/*WARN_ON(attrs[3].len != 8);*/
+	/*ios->per_dev[0].actual_space = get_unaligned_be64(attrs[3].val_ptr);*/
+	/*EXOFS_DBGMSG("(0x%llx)->per_dev[0].actual_space=0x%llx\n",*/
+			/*_LLU(oi->one_comp.obj.id), ios->per_dev[0].actual_space);*/
 
 out:
 	ore_put_io_state(ios);
@@ -1442,6 +1467,8 @@ static int exofs_update_inode(struct inode *inode, int do_sync)
 
 	attr = g_attr_inode_data;
 	attr.val_ptr = fcb;
+	EXOFS_DBGMSG("attr %d: len=0x%hx attr_id=0x%x\n",
+			0, attr.len, attr.attr_id);
 	ios->out_attr_len = 1;
 	ios->out_attr = &attr;
 
@@ -1453,6 +1480,7 @@ static int exofs_update_inode(struct inode *inode, int do_sync)
 		ios->private = args;
 	}
 
+	EXOFS_DBGMSG("boo yah!\n");
 	ret = ore_write(ios);
 	if (!do_sync && !ret) {
 		atomic_inc(&sbi->s_curr_pending);

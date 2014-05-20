@@ -367,16 +367,17 @@ int ore_io_execute(struct ore_io_state *ios)
 		ios->done = _sync_done;
 		ios->private = &wait;
 	}
+	ORE_DBGMSG("\tsync=%hhu\n", sync);
 
 	for (i = 0; i < ios->numdevs; i++) {
 		struct osd_request *or = ios->per_dev[i].or;
 		if (unlikely(!or))
 			continue;
 
+		ORE_DBGMSG("\t\tfinalize %d\n", i);
 		ret = osd_finalize_request(or, 0, _ios_cred(ios, i), NULL);
 		if (unlikely(ret)) {
-			ORE_DBGMSG("Failed to osd_finalize_request() => %d\n",
-				     ret);
+			ORE_DBGMSG("Failed to osd_finalize_request() => %d\n", ret);
 			return ret;
 		}
 	}
@@ -388,6 +389,7 @@ int ore_io_execute(struct ore_io_state *ios)
 		if (unlikely(!or))
 			continue;
 
+		ORE_DBGMSG("\t\texecute %d\n", i);
 		kref_get(&ios->kref);
 		osd_execute_request_async(or, _done_io, ios);
 	}
@@ -396,9 +398,11 @@ int ore_io_execute(struct ore_io_state *ios)
 	ret = 0;
 
 	if (sync) {
+		ORE_DBGMSG("\t\twait\n");
 		wait_for_completion(&wait);
 		ret = ore_check_io(ios, NULL);
 	}
+	ORE_DBGMSG("\tret=%u\n", ret);
 	return ret;
 }
 
@@ -467,6 +471,7 @@ int ore_check_io(struct ore_io_state *ios, ore_on_dev_error on_dev_error)
 		}
 	}
 
+	ORE_DBGMSG("\tresult=%d\n", acumulated_lin_err);
 	return acumulated_lin_err;
 }
 EXPORT_SYMBOL(ore_check_io);
@@ -582,6 +587,7 @@ void ore_calc_stripe_info(struct ore_layout *layout, u64 file_offset,
 	si->length = T - H;
 	if (si->length > length)
 		si->length = length;
+	ORE_DBGMSG("file_offset=%#llx obj_offset=%#llx dev=%u par_dev=%u length=0x%llx si->length=0x%llx\n", file_offset, si->obj_offset, si->dev, si->par_dev, length, si->length);
 
 	Nlast = div_u64(H + si->length + U - 1, U);
 	si->maxdevUnits = Nlast - N;
@@ -843,6 +849,8 @@ static int _write_mirror(struct ore_io_state *ios, int cur_comp)
 		[0] = g_attr_actual_data_space,
 	};
 
+	ORE_DBGMSG("cur_comp=%d pages=%p master_dev->length=0x%x\n",
+			cur_comp, ios->pages, master_dev->length);
 	if (ios->pages && !master_dev->length)
 		return 0; /* Just an empty slot */
 
@@ -950,6 +958,8 @@ int ore_write(struct ore_io_state *ios)
 	if (unlikely(ret))
 		return ret;
 
+	ORE_DBGMSG("(%llx) offset=%llx len=%lx\n",
+			_LLU(_ios_obj(ios, 0)->id), ios->offset, ios->length);
 	for (i = 0; i < ios->numdevs; i += ios->layout->mirrors_p1) {
 		ret = _write_mirror(ios, i);
 		if (unlikely(ret))
@@ -1013,9 +1023,15 @@ int _ore_read_mirror(struct ore_io_state *ios, unsigned cur_comp)
 	per_dev->or = or;
 
 	if (ios->pages) {
+		ORE_DBGMSG("read(0x%llx) offset=0x%llx length=0x%llx"
+			     " dev=%d sg_len=%d\n", _LLU(obj->id),
+			     _LLU(per_dev->offset), _LLU(per_dev->length),
+			     first_dev, per_dev->cur_sg);
+
 		if (per_dev->cur_sg) {
 			/* finalize the last sg_entry */
 			_ore_add_sg_seg(per_dev, 0, false);
+			ORE_DBGMSG("\tcur_sg=%u\n", per_dev->cur_sg);
 			if (unlikely(!per_dev->cur_sg))
 				return 0; /* Skip parity only device */
 
@@ -1026,11 +1042,6 @@ int _ore_read_mirror(struct ore_io_state *ios, unsigned cur_comp)
 			osd_req_read(or, obj, per_dev->offset,
 				     per_dev->bio, per_dev->length);
 		}
-
-		ORE_DBGMSG("read(0x%llx) offset=0x%llx length=0x%llx"
-			     " dev=%d sg_len=%d\n", _LLU(obj->id),
-			     _LLU(per_dev->offset), _LLU(per_dev->length),
-			     first_dev, per_dev->cur_sg);
 	} else {
 		BUG_ON(ios->kern_buff);
 
@@ -1089,6 +1100,7 @@ int extract_attr_from_ios(struct ore_io_state *ios, int dev, struct osd_attr *at
 		}
 	} while (iter);
 
+	ORE_DBGMSG("Fail\n");
 	return -EIO;
 }
 EXPORT_SYMBOL(extract_attr_from_ios);

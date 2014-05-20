@@ -342,6 +342,7 @@ int exofs_sbi_write_stats(struct exofs_sb_info *sbi)
 	ios->out_attr = attrs;
 	ios->out_attr_len = ARRAY_SIZE(attrs);
 
+	EXOFS_DBGMSG("boo yah!\n");
 	ret = ore_write(ios);
 	if (unlikely(ret)) {
 		EXOFS_ERR("%s: ore_write failed.\n", __func__);
@@ -400,6 +401,7 @@ static int exofs_sync_fs(struct super_block *sb, int wait)
 	ios->offset = 0;
 	ios->kern_buff = fscb;
 
+	EXOFS_DBGMSG("boo yah!\n");
 	ret = ore_write(ios);
 	if (unlikely(ret))
 		EXOFS_ERR("%s: ore_write failed.\n", __func__);

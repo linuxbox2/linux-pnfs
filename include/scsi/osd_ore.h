@@ -162,6 +162,7 @@ struct ore_io_state {
 		unsigned dev;
 		struct osd_sg_entry *sglist;
 		unsigned cur_sg;
+		u64 actual_space;
 	} per_dev[];
 };
 

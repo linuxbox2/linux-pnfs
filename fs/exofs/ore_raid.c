@@ -261,6 +261,7 @@ void _ore_add_stripe_page(struct __stripe_pages_2d *sp2d,
 
 	_1ps = &sp2d->_1p_stripes[si->cur_pg];
 	_1ps->pages[si->cur_comp] = page;
+	/*ORE_DBGMSG("cur_comp=%u cur_pg=%u _1ps=%p pages=%p\n", si->cur_comp, si->cur_pg, _1ps, _1ps->pages[si->cur_comp]);*/
 	++_1ps->write_count;
 
 	si->cur_pg = (si->cur_pg + 1) % sp2d->pages_in_unit;
@@ -299,6 +300,8 @@ void _ore_add_sg_seg(struct ore_per_dev_state *per_dev, unsigned cur_len,
 		/* finalize the last one */
 		sge = &per_dev->sglist[per_dev->cur_sg - 1];
 		sge->len = per_dev->length - per_dev->last_sgs_total;
+		ORE_DBGMSG("\tsge=%d offset=0x%llx length=0x%llx\n",
+				per_dev->cur_sg - 1, sge->offset, sge->len);
 	}
 
 	if (not_last) {
@@ -482,6 +485,9 @@ static int _read_4_write_first_stripe(struct ore_io_state *ios)
 	ORE_DBGMSG("stripe_start=0x%llx ios->offset=0x%llx min_p=%d max_p=%d\n",
 		   offset, ios->offset, min_p, max_p);
 
+	ORE_DBGMSG("stripe_start=0x%llx ios->offset=0x%llx min_p=%d max_p=%d\n",
+		   offset, ios->offset, min_p, max_p);
+
 	for (c = 0; ; c++) {
 		ore_calc_stripe_info(ios->layout, offset, 0, &read_si);
 		read_si.obj_offset += min_p * PAGE_SIZE;
@@ -554,6 +560,7 @@ static int _read_4_write_last_stripe(struct ore_io_state *ios)
 	while (offset < last_stripe_end) {
 		struct __1_page_stripe *_1ps = &sp2d->_1p_stripes[p];
 
+		ORE_DBGMSG("offset=0x%llx dev=%u order=%u p=%u\n", offset, read_si.dev, c, p);
 		if ((min_p <= p) && (p <= max_p)) {
 			struct page *page;
 			bool uptodate;
@@ -593,6 +600,7 @@ static int _read_4_write_execute(struct ore_io_state *ios)
 	int ret;
 
 	ios_read = ios->ios_read_4_write;
+	ORE_DBGMSG("ios_read=%p\n", ios_read);
 	if (!ios_read)
 		return 0;
 
@@ -602,6 +610,7 @@ static int _read_4_write_execute(struct ore_io_state *ios)
 	ios_read->pages = ios->pages;
 
 	/* Now read these devices */
+	ORE_DBGMSG("numdevs=%u\n", ios_read->numdevs);
 	for (i = 0; i < ios_read->numdevs; i += ios_read->layout->mirrors_p1) {
 		ret = _ore_read_mirror(ios_read, i);
 		if (unlikely(ret))
@@ -643,6 +652,7 @@ int _ore_add_parity_unit(struct ore_io_state *ios,
 
 		si->cur_pg = _sp2d_min_pg(sp2d);
 		num_pages  = _sp2d_max_pg(sp2d) + 1 - si->cur_pg;
+		ORE_DBGMSG2("cur_pg=%u num_pages=%u\n", si->cur_pg, num_pages);
 
 		if (!per_dev->length) {
 			per_dev->offset += si->cur_pg * PAGE_SIZE;
