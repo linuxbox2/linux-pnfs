@@ -520,6 +520,7 @@ static int exofs_readpage(struct file *file, struct page *page)
 static void writepages_done(struct ore_io_state *ios, void *p)
 {
 	struct page_collect *pcol = p;
+	struct exofs_i_info *oi;
 	int i;
 	u64  good_bytes;
 	u64  length = 0;
@@ -559,6 +560,9 @@ static void writepages_done(struct ore_io_state *ios, void *p)
 
 		length += PAGE_SIZE;
 	}
+
+	oi = exofs_i(pcol->inode);
+	oi->i_dev_size = ore_get_space_used(ios);
 
 	pcol_free(pcol);
 	kfree(pcol);
@@ -1106,7 +1110,7 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 		goto out;
 	}
 
-	ret = extract_attr_from_ios(ios, &attrs[0]);
+	ret = extract_attr_from_ios(ios, 0, &attrs[0]);
 	if (ret) {
 		EXOFS_ERR("%s: extract_attr 0 of inode failed\n", __func__);
 		goto out;
@@ -1114,7 +1118,7 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 	WARN_ON(attrs[0].len != EXOFS_INO_ATTR_SIZE);
 	memcpy(inode, attrs[0].val_ptr, EXOFS_INO_ATTR_SIZE);
 
-	ret = extract_attr_from_ios(ios, &attrs[1]);
+	ret = extract_attr_from_ios(ios, 0, &attrs[1]);
 	if (ret) {
 		EXOFS_ERR("%s: extract_attr 1 of inode failed\n", __func__);
 		goto out;
@@ -1129,7 +1133,7 @@ static int exofs_get_inode(struct super_block *sb, struct exofs_i_info *oi,
 		}
 	}
 
-	ret = extract_attr_from_ios(ios, &attrs[2]);
+	ret = extract_attr_from_ios(ios, 0, &attrs[2]);
 	if (ret) {
 		EXOFS_ERR("%s: extract_attr 2 of inode failed\n", __func__);
 		goto out;
@@ -1177,8 +1181,10 @@ struct inode *exofs_iget(struct super_block *sb, unsigned long ino)
 
 	/* read the inode from the osd */
 	ret = exofs_get_inode(sb, oi, &fcb);
-	if (ret)
+	if (ret) {
+		EXOFS_DBGMSG("exofs_get_inode failed\n");
 		goto bad_inode;
+	}
 
 	set_obj_created(oi);
 
@@ -1194,6 +1200,7 @@ struct inode *exofs_iget(struct super_block *sb, unsigned long ino)
 		inode->i_atime.tv_nsec = inode->i_mtime.tv_nsec = 0;
 	oi->i_commit_size = le64_to_cpu(fcb.i_size);
 	i_size_write(inode, oi->i_commit_size);
+	oi->i_dev_size = le64_to_cpu(fcb.i_dev_size);
 	inode->i_blkbits = EXOFS_BLKSHIFT;
 	inode->i_generation = le32_to_cpu(fcb.i_generation);
 
@@ -1320,7 +1327,7 @@ struct inode *exofs_new_inode(struct inode *dir, umode_t mode)
 	inode->i_ino = sbi->s_nextid++;
 	inode->i_blkbits = EXOFS_BLKSHIFT;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
-	oi->i_commit_size = inode->i_size = 0;
+	oi->i_commit_size = oi->i_dev_size = inode->i_size = 0;
 	spin_lock(&sbi->s_next_gen_lock);
 	inode->i_generation = sbi->s_next_generation++;
 	spin_unlock(&sbi->s_next_gen_lock);
@@ -1328,7 +1335,11 @@ struct inode *exofs_new_inode(struct inode *dir, umode_t mode)
 
 	exofs_init_comps(&oi->oc, &oi->one_comp, sb->s_fs_info,
 			 exofs_oi_objno(oi));
-	exofs_sbi_write_stats(sbi); /* Make sure new sbi->s_nextid is on disk */
+	ret = exofs_sbi_write_stats(sbi); /* Make sure new sbi->s_nextid is on disk */
+	if (unlikely(ret)) {
+		EXOFS_ERR("exofs_new_inode: exofs_sbi_write_stats failed\n");
+		return ERR_PTR(ret);
+	}
 
 	mark_inode_dirty(inode);
 
@@ -1405,6 +1416,8 @@ static int exofs_update_inode(struct inode *inode, int do_sync)
 	fcb->i_mtime = cpu_to_le32(inode->i_mtime.tv_sec);
 	oi->i_commit_size = i_size_read(inode);
 	fcb->i_size = cpu_to_le64(oi->i_commit_size);
+	fcb->i_dev_size = cpu_to_le64(oi->i_dev_size);
+	inode->i_blocks = oi->i_dev_size >> 9;
 	fcb->i_generation = cpu_to_le32(inode->i_generation);
 
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {

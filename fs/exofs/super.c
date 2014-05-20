@@ -286,7 +286,7 @@ static int __sbi_read_stats(struct exofs_sb_info *sbi)
 		goto out;
 	}
 
-	ret = extract_attr_from_ios(ios, &attrs[0]);
+	ret = extract_attr_from_ios(ios, 0, &attrs[0]);
 	if (ret) {
 		EXOFS_ERR("%s: extract_attr of sb_stats failed\n", __func__);
 		goto out;
@@ -907,7 +907,7 @@ static int exofs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	if (unlikely(ret))
 		goto out;
 
-	ret = extract_attr_from_ios(ios, &attrs[0]);
+	ret = extract_attr_from_ios(ios, 0, &attrs[0]);
 	if (likely(!ret)) {
 		capacity = get_unaligned_be64(attrs[0].val_ptr);
 		if (unlikely(!capacity))
@@ -915,7 +915,7 @@ static int exofs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	} else
 		EXOFS_DBGMSG("exofs_statfs: get capacity failed.\n");
 
-	ret = extract_attr_from_ios(ios, &attrs[1]);
+	ret = extract_attr_from_ios(ios, 0, &attrs[1]);
 	if (likely(!ret))
 		used = get_unaligned_be64(attrs[1].val_ptr);
 	else

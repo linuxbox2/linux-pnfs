@@ -92,6 +92,7 @@ struct exofs_i_info {
 	uint32_t       i_data[EXOFS_IDATA];/*short symlink names and device #s*/
 	uint32_t       i_dir_start_lookup; /* which page to start lookup      */
 	uint64_t       i_commit_size;      /* the object's written length     */
+	uint64_t       i_dev_size;         /* the object's on-device size     */
 	struct ore_comp one_comp;	   /* same component for all devices  */
 	struct ore_components oc;	   /* inode view of the device table  */
 

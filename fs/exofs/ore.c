@@ -839,6 +839,9 @@ static int _write_mirror(struct ore_io_state *ios, int cur_comp)
 	unsigned dev = ios->per_dev[cur_comp].dev;
 	unsigned last_comp = cur_comp + ios->layout->mirrors_p1;
 	int ret = 0;
+	struct osd_attr space_attrs[] = {
+		[0] = g_attr_actual_data_space,
+	};
 
 	if (ios->pages && !master_dev->length)
 		return 0; /* Just an empty slot */
@@ -921,6 +924,9 @@ static int _write_mirror(struct ore_io_state *ios, int cur_comp)
 		if (ios->in_attr)
 			osd_req_add_get_attr_list(or, ios->in_attr,
 						  ios->in_attr_len);
+
+		/* Always get actual size after write */
+		osd_req_add_get_attr_list(or, space_attrs, ARRAY_SIZE(space_attrs));
 	}
 
 out:
@@ -951,9 +957,42 @@ int ore_write(struct ore_io_state *ios)
 	}
 
 	ret = ore_io_execute(ios);
+	if (unlikely(ret)) {
+		ORE_DBGMSG("ore_io_execute() failed\n");
+		return ret;
+	}
+
 	return ret;
 }
 EXPORT_SYMBOL(ore_write);
+
+s64 ore_get_space_used(struct ore_io_state *ios)
+{
+	s64 dev_size = 0;
+	int i, ret;
+	struct osd_attr space_attrs[] = {
+		[0] = g_attr_actual_data_space,
+	};
+
+	for (i = 0; i < ios->numdevs; i += ios->layout->mirrors_p1) {
+		ORE_DBGMSG("\tgetting %d\n", i);
+		if (unlikely(!ios->per_dev[i].or)) {
+			ORE_DBGMSG("\t\tskip\n");
+			continue; /* Just an empty slot */
+		}
+		/* Get our real space */
+		ret = extract_attr_from_ios(ios, i, &space_attrs[0]);
+		if (unlikely(ret)) {
+			ORE_DBGMSG("extract_attr_from_ios() failed\n");
+			continue;
+		}
+		WARN_ON(space_attrs[0].len != 8);
+		dev_size += get_unaligned_be64(space_attrs[0].val_ptr);
+	}
+
+	return dev_size;
+}
+EXPORT_SYMBOL(ore_get_space_used);
 
 int _ore_read_mirror(struct ore_io_state *ios, unsigned cur_comp)
 {
@@ -1029,16 +1068,19 @@ int ore_read(struct ore_io_state *ios)
 }
 EXPORT_SYMBOL(ore_read);
 
-int extract_attr_from_ios(struct ore_io_state *ios, struct osd_attr *attr)
+int extract_attr_from_ios(struct ore_io_state *ios, int dev, struct osd_attr *attr)
 {
 	struct osd_attr cur_attr = {.attr_page = 0}; /* start with zeros */
 	void *iter = NULL;
 	int nelem;
+	struct osd_request *or = ios->per_dev[dev].or;
+
+	if (unlikely(!or))
+		return -EIO;
 
 	do {
 		nelem = 1;
-		osd_req_decode_get_attr_list(ios->per_dev[0].or,
-					     &cur_attr, &nelem, &iter);
+		osd_req_decode_get_attr_list(or, &cur_attr, &nelem, &iter);
 		if ((cur_attr.attr_page == attr->attr_page) &&
 		    (cur_attr.attr_id == attr->attr_id)) {
 			attr->len = cur_attr.len;
@@ -1162,3 +1204,6 @@ EXPORT_SYMBOL(ore_truncate);
 const struct osd_attr g_attr_logical_length = ATTR_DEF(
 	OSD_APAGE_OBJECT_INFORMATION, OSD_ATTR_OI_LOGICAL_LENGTH, 8);
 EXPORT_SYMBOL(g_attr_logical_length);
+const struct osd_attr g_attr_actual_data_space = ATTR_DEF(
+	OSD_APAGE_OBJECT_INFORMATION, OSD_ATTR_OI_ACTUAL_DATA_SPACE, 8);
+EXPORT_SYMBOL(g_attr_actual_data_space);

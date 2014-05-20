@@ -88,7 +88,7 @@ enum {
  * The file system control block - stored in object EXOFS_SUPER_ID's data.
  * This is where the in-memory superblock is stored on disk.
  */
-enum {EXOFS_FSCB_VER = 1, EXOFS_DT_VER = 1};
+enum {EXOFS_FSCB_VER = 2, EXOFS_DT_VER = 1};
 struct exofs_fscb {
 	__le64  s_nextid;	/* Only used after mkfs */
 	__le64  s_numfiles;	/* Only used after mkfs */
@@ -178,6 +178,7 @@ struct exofs_fcb {
 	__le32  i_flags;        	/* File flags (unused for now)*/
 	__le32  i_generation;   	/* File version (for NFS) */
 	__le32  i_data[EXOFS_IDATA];	/* Short symlink names and device #s */
+	__le64  i_dev_size;			/* on-device size of the file */
 };
 
 #define EXOFS_INO_ATTR_SIZE	sizeof(struct exofs_fcb)

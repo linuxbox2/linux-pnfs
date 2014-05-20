@@ -176,8 +176,8 @@ enum {
 	OSD_ATTR_OI_USERNAME             = 0x9,       /* variable */
 	OSD_ATTR_OI_USED_CAPACITY        = 0x81,      /* 8        */
 	OSD_ATTR_OI_LOGICAL_LENGTH       = 0x82,      /* 8        */
-	SD_ATTR_OI_ACTUAL_DATA_SPACE     = 0XD1,      /* 0 OR 8   */
-	SD_ATTR_OI_RESERVED_DATA_SPACE   = 0XD2,      /* 0 OR 8   */
+	OSD_ATTR_OI_ACTUAL_DATA_SPACE     = 0XD1,      /* 0 OR 8   */
+	OSD_ATTR_OI_RESERVED_DATA_SPACE   = 0XD2,      /* 0 OR 8   */
 };
 /* Object Information attributes page does not have a get_page structure */
 

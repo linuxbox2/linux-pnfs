@@ -194,8 +194,10 @@ int ore_read(struct ore_io_state *ios);
 int ore_truncate(struct ore_layout *layout, struct ore_components *comps,
 		 u64 size);
 
-int extract_attr_from_ios(struct ore_io_state *ios, struct osd_attr *attr);
+s64 ore_get_space_used(struct ore_io_state *ios);
+int extract_attr_from_ios(struct ore_io_state *ios, int dev, struct osd_attr *attr);
 
 extern const struct osd_attr g_attr_logical_length;
+extern const struct osd_attr g_attr_actual_data_space;
 
 #endif
