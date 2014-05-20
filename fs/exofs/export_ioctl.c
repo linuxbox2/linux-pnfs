@@ -248,6 +248,8 @@ _pkc_pnfs_layout_commit(
 	struct timespec mtime;
 	loff_t i_size;
 	int in_recall;
+	int ret;
+	struct pnfs_osd_layoutupdate lou;
 
 	/* In case of a recall we ignore the new size and mtime since they
 	 * are going to be changed again by truncate, and since we cannot take
@@ -300,7 +302,18 @@ _pkc_pnfs_layout_commit(
 	}
 	/* TODO: else { i_size = osd_get_object_length() } */
 
-/* TODO: exofs does not currently use the osd_xdr part of the layout_commit */
+	ret = pnfs_osd_xdr_decode_layoutupdate(&lou, xdr);
+	if (ret) {
+		EXOFS_DBGMSG("(0x%lx) Failed to decode layoutupdate: %d\n",
+			     inode->i_ino, ret);
+		return ret;
+	}
+	if (lou.dsu_valid) {
+		/* Record delta */
+		oi->i_dev_size += lou.dsu_delta;
+		EXOFS_DBGMSG("(0x%lx) dev_size=0x%llx dsu_delta=0x%llx\n",
+				inode->i_ino, oi->i_dev_size, lou.dsu_delta);
+	}
 
 	mark_inode_dirty_sync(inode);
 

@@ -265,16 +265,22 @@ enum nfsstat4 pnfs_osd_xdr_encode_deviceaddr(
  *	u32	dsu_valid;
  *	s64	dsu_delta;
  *	u32	olu_ioerr_flag;
- * };
+ * }; // xdr size 4 + 8 + 4
  */
-__be32 *
-pnfs_osd_xdr_decode_layoutupdate(struct pnfs_osd_layoutupdate *lou, __be32 *p)
+int
+pnfs_osd_xdr_decode_layoutupdate(struct pnfs_osd_layoutupdate *lou,
+			    struct exp_xdr_stream *xdr)
 {
+	__be32 *p = exp_xdr_reserve_space(xdr, 4 + 8 + 4);
+
+	if (!p)
+		return -EIO;
+
 	lou->dsu_valid = be32_to_cpu(*p++);
 	if (lou->dsu_valid)
 		p = xdr_decode_hyper(p, &lou->dsu_delta);
 	lou->olu_ioerr_flag = be32_to_cpu(*p++);
-	return p;
+	return 0;
 }
 
 /*

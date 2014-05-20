@@ -30,8 +30,8 @@ enum nfsstat4 pnfs_osd_xdr_encode_deviceaddr(
 	struct exp_xdr_stream *xdr, struct pnfs_osd_deviceaddr *devaddr);
 
 /* layout_commit decoding */
-__be32 *pnfs_osd_xdr_decode_layoutupdate(
-	struct pnfs_osd_layoutupdate *lou, __be32 *p);
+int pnfs_osd_xdr_decode_layoutupdate(struct pnfs_osd_layoutupdate *lou,
+			    struct exp_xdr_stream *xdr);
 
 /* layout_return decoding */
 bool pnfs_osd_xdr_decode_ioerr(
