@@ -496,6 +496,7 @@ struct k_xdr {
 inline int IOCTL_XDR(struct k_xdr *k_xdr,
 		     struct pan_ioctl_xdr *ioctl_xdr)
 {
+	EXOFS_DBGMSG("xdr_buf=%p xdr_alloc_len=0x%x\n", ioctl_xdr->xdr_buff, ioctl_xdr->xdr_alloc_len);
 	if (!ioctl_xdr->xdr_buff || !ioctl_xdr->xdr_alloc_len) {
 		memset(k_xdr, 0, sizeof(*k_xdr));
 		return 0;

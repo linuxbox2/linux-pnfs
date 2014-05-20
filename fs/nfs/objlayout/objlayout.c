@@ -398,7 +398,7 @@ objlayout_encode_layoutcommit(struct pnfs_layout_hdr *pnfslay,
 
 	*start = cpu_to_be32((xdr->p - start - 1) * 4);
 
-	dprintk("%s: Return delta_space_used %lld err %d\n", __func__,
+	dprintk("%s: Return delta_space_used 0x%llx err %d\n", __func__,
 		lou.dsu_delta, lou.olu_ioerr_flag);
 }
 

@@ -56,6 +56,8 @@ exp_xdr_qbytes(size_t qwords)
 	return qwords << 2;
 }
 
+#define EXOFS_DBGMSG(fmt, a...) \
+	printk(KERN_NOTICE "exofs @%s:%d: " fmt, __func__, __LINE__, ##a)
 /**
  * exp_xdr_reserve_space - Reserve buffer space for sending
  * @xdr: pointer to exp_xdr_stream
@@ -72,6 +74,7 @@ exp_xdr_reserve_space(struct exp_xdr_stream *xdr, size_t nbytes)
 
 	/* align nbytes on the next 32-bit boundary */
 	q = p + exp_xdr_qwords(nbytes);
+	EXOFS_DBGMSG("p=%p q=%p end=%p\n", p, q, xdr->end);
 	if (unlikely(q > xdr->end || q < p))
 		return NULL;
 	xdr->p = q;
