@@ -325,11 +325,14 @@ void
 objlayout_write_done(struct objlayout_io_res *oir, ssize_t status, bool sync)
 {
 	struct nfs_write_data *wdata = oir->rpcdata;
+	s64 pre_size;
 
 	oir->status = wdata->task.tk_status = status;
 	if (status >= 0) {
 		wdata->res.count = status;
 		wdata->verf.committed = oir->committed;
+		pre_size = wdata->header->inode->i_blocks * 512;
+		objlayout_add_delta_space_used(oir->objlay, oir->obj_size - pre_size);
 	} else {
 		wdata->header->pnfs_error = status;
 	}

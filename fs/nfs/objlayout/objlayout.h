@@ -83,6 +83,7 @@ struct objlayout_io_res {
 
 	/* Error reporting (layout_return) */
 	struct list_head err_list;
+	__s64 obj_size; /* Total object size after write */
 	unsigned num_comps;
 	/* Pointer to array of error descriptors of size num_comps.
 	 * It should contain as many entries as devices in the osd_layout

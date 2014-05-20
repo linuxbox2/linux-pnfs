@@ -477,6 +477,7 @@ static void _write_done(struct ore_io_state *ios, void *private)
 		 * See OSD2r05 Section 4.13 Data persistence model */
 		objios->oir.committed = NFS_FILE_SYNC;
 		status = ios->length;
+		objios->oir.obj_size = ore_get_space_used(objios->ios);
 	} else {
 		status = ret;
 	}
