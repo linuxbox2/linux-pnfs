@@ -1554,6 +1554,7 @@ void pnfs_ld_write_done(struct nfs_write_data *data)
 	if (!hdr->pnfs_error) {
 		pnfs_set_layoutcommit(data);
 		hdr->mds_ops->rpc_call_done(&data->task, data);
+		pnfs_check_layoutrecalled(data);
 	} else
 		pnfs_ld_handle_write_error(data);
 	hdr->mds_ops->rpc_release(data);
@@ -1888,6 +1889,41 @@ pnfs_set_layoutcommit(struct nfs_write_data *wdata)
 }
 EXPORT_SYMBOL_GPL(pnfs_set_layoutcommit);
 
+void
+pnfs_set_layoutrecalled(struct inode *inode)
+{
+	struct nfs_inode *nfsi = NFS_I(inode);
+
+	spin_lock(&inode->i_lock);
+	if (!test_and_set_bit(NFS_INO_LAYOUTRECALLED, &nfsi->flags)) {
+		dprintk("%s: layout for for inode %lu has been recalled\n",
+			__func__, inode->i_ino);
+	}
+	spin_unlock(&inode->i_lock);
+}
+EXPORT_SYMBOL_GPL(pnfs_set_layoutrecalled);
+
+void
+pnfs_check_layoutrecalled(struct nfs_write_data *wdata)
+{
+	struct nfs_pgio_header *hdr = wdata->header;
+	struct inode *inode = hdr->inode;
+	struct nfs_inode *nfsi = NFS_I(inode);
+	int ret;
+
+	dprintk("--> %s inode %lu\n", __func__, inode->i_ino);
+	if (test_and_clear_bit(NFS_INO_LAYOUTRECALLED, &nfsi->flags)) {
+		dprintk("%s: commit\n", __func__);
+		ret = pnfs_layoutcommit_inode(inode, true);
+		if (ret == 0) {
+			dprintk("%s: return\n", __func__);
+			ret = _pnfs_return_layout(inode);
+		}
+	}
+	dprintk("<-- %s inode %lu\n", __func__, inode->i_ino);
+}
+EXPORT_SYMBOL_GPL(pnfs_check_layoutrecalled);
+
 void pnfs_cleanup_layoutcommit(struct nfs4_layoutcommit_data *data)
 {
 	struct nfs_server *nfss = NFS_SERVER(data->args.inode);
@@ -1913,10 +1949,12 @@ pnfs_layoutcommit_inode(struct inode *inode, bool sync)
 	loff_t end_pos;
 	int status;
 
-	if (!pnfs_layoutcommit_outstanding(inode))
-		return 0;
-
 	dprintk("--> %s inode %lu\n", __func__, inode->i_ino);
+	if (!pnfs_layoutcommit_outstanding(inode)) {
+		status = 0;
+		goto out;
+	}
+
 
 	status = -EAGAIN;
 	if (test_and_set_bit(NFS_INO_LAYOUTCOMMITTING, &nfsi->flags)) {
@@ -1938,6 +1976,7 @@ pnfs_layoutcommit_inode(struct inode *inode, bool sync)
 
 	status = 0;
 	spin_lock(&inode->i_lock);
+	clear_bit(NFS_INO_LAYOUTRECALLED, &nfsi->flags);
 	if (!test_and_clear_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->flags))
 		goto out_unlock;
 

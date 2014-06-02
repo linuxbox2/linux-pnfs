@@ -218,6 +218,7 @@ struct nfs_inode {
 #define NFS_INO_COMMIT		(7)		/* inode is committing unstable writes */
 #define NFS_INO_LAYOUTCOMMIT	(9)		/* layoutcommit required */
 #define NFS_INO_LAYOUTCOMMITTING (10)		/* layoutcommit inflight */
+#define NFS_INO_LAYOUTRECALLED (11)		/* layout has been recalled */
 
 static inline struct nfs_inode *NFS_I(const struct inode *inode)
 {

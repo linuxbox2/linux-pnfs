@@ -172,6 +172,9 @@ static u32 initiate_file_draining(struct nfs_client *clp,
 	pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
 	spin_unlock(&ino->i_lock);
 
+	/* Note it's recalled */
+	pnfs_set_layoutrecalled(ino);
+
 	/* kick out any segs held by need to commit */
 	pnfs_layoutcommit_inode(ino, true);
 
