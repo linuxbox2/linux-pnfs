@@ -180,7 +180,8 @@ _pnfs_layout_get(
 	ore_layout_2_pnfs_layout(&layout, &sbi->layout);
 
 	ore_calc_stripe_info(&sbi->layout, res->segment.offset, 0, &si);
-	layout.olo_comps_index = si.dev;
+	layout.olo_comps_index = si.dev - (si.dev %
+			(sbi->layout.group_width * sbi->layout.mirrors_p1));
 	layout.olo_num_comps = sbi->layout.group_width * sbi->layout.mirrors_p1;
 
 	nfserr = pnfs_osd_xdr_encode_layout_hdr(xdr, &layout);
@@ -188,11 +189,13 @@ _pnfs_layout_get(
 		goto out;
 
 	/* Encode layout components */
-	for (i = si.dev; i < si.dev + layout.olo_num_comps; i++) {
+	for (i = 0; i < layout.olo_num_comps; i++) {
 		struct pnfs_osd_object_cred cred;
 		struct exofs_dev *ed = container_of(oi->oc.ods[i],
 							typeof(*ed), ored);
 
+		EXOFS_DBGMSG("   (0x%lx) i=%u export_id=0x%llx did=0x%x\n",
+				inode->i_ino, i, args->export_id, ed->did);
 		set_dev_id(&cred.oc_object_id.oid_device_id, args->export_id,
 			   ed->did);
 		cred.oc_object_id.oid_partition_id = oi->one_comp.obj.partition;
@@ -212,7 +215,7 @@ _pnfs_layout_get(
 		if (unlikely(nfserr)) {
 			EXOFS_DBGMSG("(0x%lx) nfserr=%u total=%u encoded=%u\n",
 				     inode->i_ino, nfserr, layout.olo_num_comps,
-				     i - si.dev);
+				     i);
 			goto out;
 		}
 	}
