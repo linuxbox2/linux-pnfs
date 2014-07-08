@@ -683,6 +683,10 @@ static int _add_parity_units(struct ore_io_state *ios,
 			 */
 			per_dev->dev = dev;
 			per_dev->cur_offset = per_dev->offset = si->obj_offset - si->unit_off;
+			if (dev != si->dev) {
+				/* Non-first-unit devices advance by a full stripe_unit */
+				cur_len = ios->layout->stripe_unit;
+			}
 		}
 		ORE_DBGMSG("slot=%u dev=%u par_dev=%u dev_offset=%#-7llx cur_offset=%#-7llx\n" , dev - first_dev, dev, si->par_dev, per_dev->offset, per_dev->cur_offset);
 		per_dev->cur_offset += ios->layout->stripe_unit;
