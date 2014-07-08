@@ -157,6 +157,7 @@ struct ore_io_state {
 		struct osd_request *or;
 		struct bio *bio;
 		loff_t offset;
+		loff_t cur_offset;
 		unsigned length;
 		unsigned last_sgs_total;
 		unsigned dev;

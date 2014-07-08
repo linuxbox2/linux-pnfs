@@ -115,7 +115,7 @@ int ore_verify_layout(unsigned total_comps, struct ore_layout *layout)
 		layout->max_io_length /= stripe_length;
 		layout->max_io_length *= stripe_length;
 	}
-	ORE_DBGMSG("max_io_length=0x%lx\n", layout->max_io_length);
+	ORE_DBGMSG("layout: alg=%d stripe_unit=0x%x mirrors_p1=0x%x group_width=0x%x parity=0x%x group_depth=0x%llx group_count=0x%x max_io_length=0x%lx\n", layout->raid_algorithm, layout->stripe_unit, layout->mirrors_p1, layout->group_width, layout->parity, layout->group_depth, layout->group_count, layout->max_io_length);
 
 	return 0;
 }
@@ -367,14 +367,14 @@ int ore_io_execute(struct ore_io_state *ios)
 		ios->done = _sync_done;
 		ios->private = &wait;
 	}
-	ORE_DBGMSG("\tsync=%hhu\n", sync);
+	/*ORE_DBGMSG("\tsync=%hhu\n", sync);*/
 
 	for (i = 0; i < ios->numdevs; i++) {
 		struct osd_request *or = ios->per_dev[i].or;
 		if (unlikely(!or))
 			continue;
 
-		ORE_DBGMSG("\t\tfinalize %d\n", i);
+		/*ORE_DBGMSG("\t\tfinalize %d\n", i);*/
 		ret = osd_finalize_request(or, 0, _ios_cred(ios, i), NULL);
 		if (unlikely(ret)) {
 			ORE_DBGMSG("Failed to osd_finalize_request() => %d\n", ret);
@@ -389,7 +389,7 @@ int ore_io_execute(struct ore_io_state *ios)
 		if (unlikely(!or))
 			continue;
 
-		ORE_DBGMSG("\t\texecute %d\n", i);
+		/*ORE_DBGMSG("\t\texecute %d\n", i);*/
 		kref_get(&ios->kref);
 		osd_execute_request_async(or, _done_io, ios);
 	}
@@ -398,11 +398,11 @@ int ore_io_execute(struct ore_io_state *ios)
 	ret = 0;
 
 	if (sync) {
-		ORE_DBGMSG("\t\twait\n");
+		/*ORE_DBGMSG("\t\twait\n");*/
 		wait_for_completion(&wait);
 		ret = ore_check_io(ios, NULL);
 	}
-	ORE_DBGMSG("\tret=%u\n", ret);
+	/*ORE_DBGMSG("\tret=%u\n", ret);*/
 	return ret;
 }
 
@@ -682,8 +682,10 @@ static int _add_parity_units(struct ore_io_state *ios,
 			 * initialize the per_dev info.
 			 */
 			per_dev->dev = dev;
-			per_dev->offset = si->obj_offset - si->unit_off;
+			per_dev->cur_offset = per_dev->offset = si->obj_offset - si->unit_off;
 		}
+		ORE_DBGMSG("slot=%u dev=%u par_dev=%u dev_offset=%#-7llx cur_offset=%#-7llx\n" , dev - first_dev, dev, si->par_dev, per_dev->offset, per_dev->cur_offset);
+		per_dev->cur_offset += ios->layout->stripe_unit;
 
 		ret = _ore_add_parity_unit(ios, si, per_dev, cur_len,
 					   do_parity == 1);
@@ -711,6 +713,7 @@ static int _prepare_for_striping(struct ore_io_state *ios)
 	unsigned first_dev = dev - (dev % devs_in_group);
 	unsigned cur_pg = ios->pages_consumed;
 	u64 length = ios->length;
+	u64 file_offset = si->offset;
 	int ret = 0;
 
 	if (!ios->pages) {
@@ -719,6 +722,7 @@ static int _prepare_for_striping(struct ore_io_state *ios)
 	}
 
 	BUG_ON(length > si->length);
+	ORE_DBGMSG("id=0x%llx\n", _LLU(_ios_obj(ios, si->cur_comp)->id));
 
 	while (length) {
 		struct ore_per_dev_state *per_dev =
@@ -730,13 +734,15 @@ static int _prepare_for_striping(struct ore_io_state *ios)
 			per_dev->dev = dev;
 			if (dev == si->dev) {
 				WARN_ON(dev == si->par_dev);
-				per_dev->offset = si->obj_offset;
+				per_dev->cur_offset = per_dev->offset = si->obj_offset;
 				cur_len = stripe_unit - si->unit_off;
 				page_off = si->unit_off & ~PAGE_MASK;
 				BUG_ON(page_off && (page_off != ios->pgbase));
+				ORE_DBGMSG("   match\n");
 			} else {
-				per_dev->offset = si->obj_offset - si->unit_off;
+				per_dev->cur_offset = per_dev->offset = si->obj_offset - si->unit_off;
 				cur_len = stripe_unit;
+				ORE_DBGMSG("   no match\n");
 			}
 		} else {
 			cur_len = stripe_unit;
@@ -744,12 +750,15 @@ static int _prepare_for_striping(struct ore_io_state *ios)
 		if (cur_len >= length)
 			cur_len = length;
 
+		ORE_DBGMSG("slot=%u dev=%u par_dev=%u dev_offset=%#-7llx cur_offset=%#-7llx file_offset=%#-7llx cur_len=0x%x\n" , dev - first_dev, dev, si->par_dev, per_dev->offset, per_dev->cur_offset, file_offset, cur_len);
 		ret = _ore_add_stripe_unit(ios, &cur_pg, page_off, ios->pages,
 					   per_dev, cur_len);
 		if (unlikely(ret))
 			goto out;
 
+		per_dev->cur_offset += cur_len;
 		length -= cur_len;
+		file_offset += cur_len;
 
 		dev = ((dev + mirrors_p1) % devs_in_group) + first_dev;
 		si->cur_comp = (si->cur_comp + 1) % group_width;

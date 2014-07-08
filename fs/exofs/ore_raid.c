@@ -485,9 +485,6 @@ static int _read_4_write_first_stripe(struct ore_io_state *ios)
 	ORE_DBGMSG("stripe_start=0x%llx ios->offset=0x%llx min_p=%d max_p=%d\n",
 		   offset, ios->offset, min_p, max_p);
 
-	ORE_DBGMSG("stripe_start=0x%llx ios->offset=0x%llx min_p=%d max_p=%d\n",
-		   offset, ios->offset, min_p, max_p);
-
 	for (c = 0; ; c++) {
 		ore_calc_stripe_info(ios->layout, offset, 0, &read_si);
 		read_si.obj_offset += min_p * PAGE_SIZE;
