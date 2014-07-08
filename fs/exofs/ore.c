@@ -788,7 +788,8 @@ static int _prepare_for_striping(struct ore_io_state *ios)
 			/* Next stripe, start fresh */
 			si->cur_comp = 0;
 			si->cur_pg = 0;
-			si->obj_offset += cur_len;
+			/* New offset is always stripe aligned */
+			si->obj_offset += stripe_unit - si->unit_off;
 			si->unit_off = 0;
 		}
 	}
