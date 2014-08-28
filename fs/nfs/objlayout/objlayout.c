@@ -589,6 +589,16 @@ struct objlayout_deviceinfo {
 	struct pnfs_osd_deviceaddr da; /* This must be last */
 };
 
+struct pnfs_deviceid {
+	/** FSAL_ID - to dispatch getdeviceinfo based on */
+	uint8_t fsal_id;
+	uint8_t device_id1;
+	uint16_t device_id2;
+	uint32_t device_id4;
+	/** Break up the remainder into useful chunks */
+	uint64_t devid;
+};
+
 /* Initialize and call nfs_getdeviceinfo, then decode and return a
  * "struct pnfs_osd_deviceaddr *" Eventually objlayout_put_deviceinfo()
  * should be called.
@@ -602,6 +612,7 @@ int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
 	struct page *page, **pages;
 	u32 *p;
 	int err;
+	struct pnfs_deviceid *dev_id;
 
 	page = alloc_page(gfp_flags);
 	if (!page)
@@ -617,6 +628,8 @@ int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
 	pd.pglen = PAGE_SIZE;
 	pd.mincount = 0;
 	pd.maxcount = PAGE_SIZE;
+	dev_id = (struct pnfs_deviceid*)&pd.dev_id;
+	dprintk("%s: fsal_id=%0hhx device_id1=%0hhx device_id2=%0hx device_id4=%0x devid=%0llx\n", __func__, dev_id->fsal_id, dev_id->device_id1, dev_id->device_id2, dev_id->device_id4, dev_id->devid);
 
 	err = nfs4_proc_getdeviceinfo(NFS_SERVER(pnfslay->plh_inode), &pd,
 			pnfslay->plh_lc_cred);
@@ -760,8 +773,10 @@ int objlayout_autologin(struct pnfs_osd_deviceaddr *deviceaddr)
 	int rc;
 	struct __auto_login login;
 
-	if (!deviceaddr->oda_targetaddr.ota_netaddr.r_addr.len)
+	if (!deviceaddr->oda_targetaddr.ota_netaddr.r_addr.len) {
+		dprintk("%s:no target address\n", __func__);
 		return -ENODEV;
+	}
 
 	memset(&login, 0, sizeof(login));
 	__copy_nfsS_and_zero_terminate(
@@ -773,6 +788,8 @@ int objlayout_autologin(struct pnfs_osd_deviceaddr *deviceaddr)
 		login.osdname, sizeof(login.osdname), "OSDNAME");
 
 	_sysid_2_hex(deviceaddr->oda_systemid, login.systemid_hex);
+
+	dprintk("%s: uri=%s osdname=%s systemid=%s\n", __func__, login.uri, login.osdname, login.systemid_hex);
 
 	rc = __objlayout_upcall(&login);
 	if (rc > 0) /* script returns positive values */

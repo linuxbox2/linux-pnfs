@@ -37,13 +37,14 @@ const static unsigned sb_shared_num_stripes = 8;
 // 	return LAYOUT_OSD2_OBJECTS;
 // }
 
-static void set_dev_id(struct nfs4_deviceid *pnfs_devid, u64 sbid, u64 devid)
+static void set_dev_id(struct nfs4_deviceid *pnfs_devid, u8 fsal_id, u64 devid)
 {
-	struct nfsd4_pnfs_deviceid *dev_id =
-		(struct nfsd4_pnfs_deviceid *)pnfs_devid;
+	struct pnfs_deviceid *dev_id =
+		(struct pnfs_deviceid *)pnfs_devid;
 
-	dev_id->sbid  = sbid;
+	dev_id->fsal_id = fsal_id;
 	dev_id->devid = devid;
+	EXOFS_DBGMSG("device_id: fsal_id=%0hhx device_id1=%0hhx device_id2=%0hx device_id4=%0x devid=%0llx\n", dev_id->fsal_id, dev_id->device_id1, dev_id->device_id2, dev_id->device_id4, dev_id->devid);
 }
 
 static int cb_layout_recall(
@@ -196,8 +197,7 @@ _pnfs_layout_get(
 
 		EXOFS_DBGMSG("   (0x%lx) i=%u export_id=0x%llx did=0x%x\n",
 				inode->i_ino, i, args->export_id, ed->did);
-		set_dev_id(&cred.oc_object_id.oid_device_id, args->export_id,
-			   ed->did);
+		set_dev_id(&cred.oc_object_id.oid_device_id, FSAL_ID_VFS, ed->did);
 		cred.oc_object_id.oid_partition_id = oi->one_comp.obj.partition;
 		cred.oc_object_id.oid_object_id = oi->one_comp.obj.id;
 		cred.oc_osd_version = osd_dev_is_ver1(ed->ored.od) ?
@@ -393,8 +393,7 @@ static int _pkc_pnfs_device_info(
 	memset(&devaddr, 0, sizeof(devaddr));
 
 	if (unlikely(devno >= sbi->oc.numdevs)) {
-		EXOFS_DBGMSG("Error: Device((%llx,%llx) does not exist\n",
-			     devid->export_id, devno);
+		EXOFS_DBGMSG("Error: Device(%llx) does not exist\n", devno);
 		return -ENODEV;
 	}
 
@@ -410,6 +409,7 @@ static int _pkc_pnfs_device_info(
 	devaddr.oda_targetaddr.ota_available = OBJ_OTA_AVAILABLE;
 	devaddr.oda_targetaddr.ota_netaddr.r_addr.data = (void *)edev->uri;
 	devaddr.oda_targetaddr.ota_netaddr.r_addr.len = edev->urilen;
+	EXOFS_DBGMSG("ota_available=%u, targetaddr=%s\n", OBJ_OTA_AVAILABLE, edev->uri);
 
 	/* skip opaque size, will be filled-in later */
 	start = exp_xdr_reserve_qwords(xdr, 1);
@@ -426,9 +426,8 @@ static int _pkc_pnfs_device_info(
 
 	exp_xdr_encode_opaque_len(start, xdr->p);
 
-	EXOFS_DBGMSG("xdr_bytes=%Zu devid=(%llx,%llx) osdname-%s\n",
-		     exp_xdr_qbytes(xdr->p - start), devid->export_id, devno,
-		     odi->osdname);
+	EXOFS_DBGMSG("xdr_bytes=%Zu devid=(%llx) osdname-%s\n",
+		     exp_xdr_qbytes(xdr->p - start), devno, odi->osdname);
 	return 0;
 
 err:

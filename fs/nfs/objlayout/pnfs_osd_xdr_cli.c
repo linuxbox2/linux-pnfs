@@ -177,10 +177,21 @@ int pnfs_osd_xdr_decode_layout_map(struct pnfs_osd_layout *layout,
 	return 0;
 }
 
+struct pnfs_deviceid {
+	/** FSAL_ID - to dispatch getdeviceinfo based on */
+	uint8_t fsal_id;
+	uint8_t device_id1;
+	uint16_t device_id2;
+	uint32_t device_id4;
+	/** Break up the remainder into useful chunks */
+	uint64_t devid;
+};
+
 bool pnfs_osd_xdr_decode_layout_comp(struct pnfs_osd_object_cred *comp,
 	struct pnfs_osd_xdr_decode_layout_iter *iter, struct xdr_stream *xdr,
 	int *err)
 {
+	struct pnfs_deviceid *dev_id;
 	BUG_ON(iter->decoded_comps > iter->total_comps);
 	if (iter->decoded_comps == iter->total_comps)
 		return false;
@@ -201,6 +212,9 @@ bool pnfs_osd_xdr_decode_layout_comp(struct pnfs_osd_object_cred *comp,
 		comp->oc_object_id.oid_object_id,
 		comp->oc_cap_key.cred_len, comp->oc_cap.cred_len);
 
+
+	dev_id = (struct pnfs_deviceid*)&comp->oc_object_id.oid_device_id;
+	dprintk("%s: fsal_id=%0hhx device_id1=%0hhx device_id2=%0hx device_id4=%0x devid=%0llx\n", __func__, dev_id->fsal_id, dev_id->device_id1, dev_id->device_id2, dev_id->device_id4, dev_id->devid);
 	iter->decoded_comps++;
 	return true;
 }
@@ -281,9 +295,12 @@ __read_targetaddr(__be32 *p, struct pnfs_osd_targetaddr *targetaddr)
 
 	ota_available = be32_to_cpup(p++);
 	targetaddr->ota_available = ota_available;
+	dprintk("%s: ota_available=%u\n", __func__, ota_available);
 
-	if (ota_available)
+	if (ota_available) {
 		p = __read_net_addr(p, &targetaddr->ota_netaddr);
+		dprintk("%s: ota_netaddr=%s\n", __func__, targetaddr->ota_netaddr.r_addr.data);
+	}
 
 
 	return p;

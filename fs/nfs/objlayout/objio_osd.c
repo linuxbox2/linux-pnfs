@@ -173,6 +173,8 @@ static int objio_devices_lookup(struct pnfs_layout_hdr *pnfslay,
 		goto out;
 	}
 
+	dprintk("%s: osdname=%s systemid_len=%u\n", __func__, odi.osdname, odi.systemid_len);
+
 retry_lookup:
 	od = osduld_info_lookup(&odi);
 	if (unlikely(IS_ERR(od))) {
@@ -182,7 +184,10 @@ retry_lookup:
 			err = objlayout_autologin(deviceaddr);
 			if (likely(!err)) {
 				retry_flag = false;
+				dprintk("%s: retry\n", __func__);
 				goto retry_lookup;
+			} else {
+				dprintk("%s: objlayout_autologin => %d\n", __func__, err);
 			}
 		}
 		goto out;

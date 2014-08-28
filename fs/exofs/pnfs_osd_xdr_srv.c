@@ -80,13 +80,11 @@ static inline enum nfsstat4 pnfs_osd_xdr_encode_objid(
 	struct pnfs_osd_objid *object_id)
 {
 	__be32 *p = exp_xdr_reserve_qwords(xdr, 2+2+2+2);
-	struct nfsd4_pnfs_deviceid *dev_id =
-		(struct nfsd4_pnfs_deviceid *)&object_id->oid_device_id;
-
 	if (!p)
 		return NFS4ERR_TOOSMALL;
 
-	p = nfsd4_encode_deviceid(p, dev_id);
+	p = exp_xdr_encode_bytes(p, object_id->oid_device_id.data,
+			sizeof(object_id->oid_device_id.data));
 	p = exp_xdr_encode_u64(p, object_id->oid_partition_id);
 	p = exp_xdr_encode_u64(p, object_id->oid_object_id);
 
