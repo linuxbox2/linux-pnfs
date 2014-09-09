@@ -172,18 +172,17 @@ static u32 initiate_file_draining(struct nfs_client *clp,
 	pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
 	spin_unlock(&ino->i_lock);
 
-	/* Note it's recalled */
-	pnfs_set_layoutrecalled(ino);
-
 	/* kick out any segs held by need to commit */
 	pnfs_layoutcommit_inode(ino, true);
 
 	spin_lock(&ino->i_lock);
 	if (test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags) ||
 	    pnfs_mark_matching_lsegs_invalid(lo, &free_me_list,
-					&args->cbl_range))
+					&args->cbl_range)) {
 		rv = NFS4ERR_DELAY;
-	else
+		/* Note it's recalled */
+		pnfs_set_layoutrecalled(ino);
+	} else
 		rv = NFS4ERR_NOMATCHING_LAYOUT;
 // 	pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
 	spin_unlock(&ino->i_lock);
